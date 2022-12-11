@@ -2,16 +2,21 @@
 #include <stdlib.h>
 #include <time.h>
 #include <stdbool.h>
+#include <mosquitto.h>
 
 // Tic Tac Toe game in between 2 players or player vs computer
 
-int intro();
+void intro();
+bool connectToServer();
 void printBoard(char state[]);
 char determineXO(int turns);
-bool checkRange(int A, int B);
+bool checkRange(int sel);
 int getSelection(int A, int B);
 bool checkValidity(int selection, char state[]);
 bool winTest(char state[]);
+void recieved(struct mosquitto *mosq, void *obj, const struct mosquitto_message *message);
+
+struct mosquitto *mosq;
 
 int main()
 {
@@ -29,147 +34,75 @@ int main()
     int turns;
     int x;
     int y;
+    int choice;
+    bool connected;
     bool gameOver;
 
-    int choice = intro(); // Prompts user and stores game choice
+    mosquitto_lib_init();
+    connected = connectToServer();
+    mosquitto_message_callback_set(mosq, recieved);
 
-    if (choice == 1)
+    if (!connected) {
+        return EXIT_FAILURE;
+    }
+
+    intro();
+
+    // print current status of the board
+    printBoard(state);
+    turns = 0;
+    gameOver = false;
+
+    // Plays out game for 9 turns
+    while (turns < 9 && !gameOver)
     {
-        // print current status of the board
-        printBoard(state);
-        turns = 0;
-        gameOver = false;
+        int sel = 0; // tracks selection
+        int player = 0;
 
-        // Plays out game for 9 turns
-        while (turns < 9 && !gameOver)
+        if (determineXO(turns) == 'X')
         {
-            int A = 0; // tracks row
-            int B = 0; // tracks column
-            int player = 0;
+            player = 1;
+        }
+        else
+        {
+            player = 2;
+        }
+        printf("Player%d: make your move", player);
+        scanf("%d", &sel);
+        sel = sel - 1;
 
-            if (determineXO(turns) == 'X')
+        while (!checkRange(sel))
+        { // Makes sure that the moves correspond to spaces on the board
+            printf("invalid move");
+            scanf("%d", &sel);
+            sel = sel - 1;
+        }
+
+        while (!checkValidity(sel, state))
+        { // Makes sure the desired space is empty before replacing the current token
+            printf("invalid move");
+            scanf("%d", &sel);
+            sel = sel - 1;
+        }
+
+        state[sel] = determineXO(turns); // Sets token in gameboard space
+        printBoard(state);                              // prints board
+        turns++;
+        gameOver = winTest(state); // checks to see for winner
+        if (gameOver)
+        {
+            if (determineXO(turns - 1) == 'X')
             {
-                player = 1;
+                printf("Player 1 wins!\n");
             }
             else
             {
-                player = 2;
-            }
-            printf("Player%d: make your move", player);
-            scanf("%d %d", &A, &B);
-
-            while (!checkRange(A, B))
-            { // Makes sure that the moves correspond to spaces on the board
-                printf("invalid move");
-                scanf("%d %d", &A, &B);
-            }
-
-            while (!checkValidity(getSelection(A, B), state))
-            { // Makes sure the desired space is empty before replacing the current token
-                printf("invalid move");
-                scanf("%d %d", &A, &B);
-            }
-
-            state[getSelection(A, B)] = determineXO(turns); // Sets token in gameboard space
-            printBoard(state);                              // prints board
-            turns++;
-            gameOver = winTest(state); // checks to see for winner
-            if (gameOver)
-            {
-                if (determineXO(turns - 1) == 'X')
-                {
-                    printf("Player 1 wins!\n");
-                }
-                else
-                {
-                    printf("Player 2 wins!\n");
-                }
-            }
-            if (turns == 9 && !gameOver)
-            { // checks to see if tie
-                printf("Tie game!\n");
+                printf("Player 2 wins!\n");
             }
         }
-    }
-    if (choice == 2)
-    {
-        // print current status of the board
-        printBoard(state);
-        turns = 0;
-        gameOver = false;
-        time_t t;
-        srand((unsigned)time(&t)); // generates random sequence based on system time
-
-        // Plays out game for 9 turns
-        while (turns < 9 && !gameOver)
-        {
-            int A = 0; // tracks row
-            int B = 0; // tracks column
-            int player = 0;
-
-            if (determineXO(turns) == 'X')
-            {
-                player = 1;
-            }
-            else
-            {
-                player = 2;
-            }
-
-            if (player == 1) // Normal player move
-            {
-                printf("Player%d: make your move", player);
-                scanf("%d %d", &A, &B);
-
-                while (!checkRange(A, B))
-                { // Makes sure that the moves correspond to spaces on the board
-                    printf("invalid move");
-                    scanf("%d %d", &A, &B);
-                }
-
-                while (!checkValidity(getSelection(A, B), state))
-                { // Makes sure the desired space is empty before replacing the current token
-                    printf("invalid move");
-                    scanf("%d %d", &A, &B);
-                }
-            }
-            else
-            { // random computer move
-                A = rand() % 4;
-                B = rand() % 4;
-
-                while (!checkRange(A, B))
-                { // Makes sure that the moves correspond to spaces on the board
-                   A = rand() % 4;
-                   B = rand() % 4;
-                }
-
-                while (!checkValidity(getSelection(A, B), state))
-                { // Makes sure the desired space is empty before replacing the current token
-                    A = rand() % 4;
-                    B = rand() % 4;
-                }
-            }
-
-            state[getSelection(A, B)] = determineXO(turns); // Sets token in gameboard space
-            printBoard(state);                              // prints board
-            turns++;
-            gameOver = winTest(state); // checks to see for winner
-            if (gameOver)
-            {
-                if (determineXO(turns - 1) == 'X')
-                {
-                    printf("Player 1 wins!\n");
-                }
-                else
-                {
-                    printf("Computer wins!\n");
-                }
-            }
-            if (turns == 9 && !gameOver)
-            { // checks to see if tie
-                printf("Tie game!\n");
-            }
+        if (turns == 9 && !gameOver)
+        { // checks to see if tie
+            printf("Tie game!\n");
         }
     }
 
@@ -179,24 +112,33 @@ int main()
     printf("Enter your choice (1 or 2):\n");
     scanf("%d", &choice);
 
-    if (choice == 1) {
+    if (choice == 1)
+    {
         main();
     }
 
-    return 0;
+    return EXIT_SUCCESS;
 }
 
-int intro()
+void intro()
 {
     int choice; // tracks whether user wants to play vs computer or other player
     printf("===========================\n");
     printf("WELCOME TO TIC TAC TOE!\n");
-    printf("1 --- person vs. person\n");
-    printf("2 --- person vs. random computer\n");
-    printf("Enter your choice (1 or 2):\n===========================\n");
-    scanf("%d", &choice);
-    printf("You have entered choice %d\n", choice);
-    return choice;
+    printf("Waiting for Player1 to start the game\n");
+    printf("===========================\n");
+}
+
+bool connectToServer() {
+    mosq = mosquitto_new(NULL, true, NULL);
+
+    int rtn = mosquitto_connect(mosq, "localhost", 1883, 30);
+
+    if (rtn != MOSQ_ERR_SUCCESS) {
+        printf("Error connecting");
+        return false;
+    }
+    return true;
 }
 
 void printBoard(char state[])
@@ -220,70 +162,15 @@ char determineXO(int turns)
     return player;
 }
 
-bool checkRange(int A, int B)
+bool checkRange(int sel)
 {
     bool test = false;
 
-    if (!(A > 3) && !(A < 1))
-    {
-        if (!(B > 3) && !(B < 1))
-        {
-            test = true;
-        }
+    if (sel >= 0 && sel <= 8) {
+        test = true;
     }
 
     return test;
-}
-
-int getSelection(int A, int B)
-{
-    int selection = -1;
-    if (A == 1)
-    {
-        if (B == 1)
-        {
-            selection = 0;
-        }
-        else if (B == 2)
-        {
-            selection = 1;
-        }
-        else if (B == 3)
-        {
-            selection = 2;
-        }
-    }
-    else if (A == 2)
-    {
-        if (B == 1)
-        {
-            selection = 3;
-        }
-        else if (B == 2)
-        {
-            selection = 4;
-        }
-        else if (B == 3)
-        {
-            selection = 5;
-        }
-    }
-    else if (A == 3)
-    {
-        if (B == 1)
-        {
-            selection = 6;
-        }
-        else if (B == 2)
-        {
-            selection = 7;
-        }
-        else if (B == 3)
-        {
-            selection = 8;
-        }
-    }
-    return selection;
 }
 
 bool checkValidity(int selection, char state[])
@@ -371,4 +258,8 @@ bool winTest(char state[])
     }
 
     return gameOver;
+}
+
+void recieved(struct mosquitto *mosq, void *obj, const struct mosquitto_message *message) {
+
 }
