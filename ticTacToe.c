@@ -3,6 +3,7 @@
 #include <time.h>
 #include <stdbool.h>
 #include <mosquitto.h>
+#include <unistd.h>
 
 // Tic Tac Toe game in between 2 players or player vs computer
 
@@ -13,10 +14,14 @@ char determineXO(int turns);
 bool checkRange(int sel);
 int getSelection(int A, int B);
 bool checkValidity(int selection, char state[]);
+bool getMove(char state[]);
+//int getP2Move(char state[]);
 bool winTest(char state[]);
-void recieved(struct mosquitto *mosq, void *obj, const struct mosquitto_message *message);
+void messageRecieved(struct mosquitto *mosq, void *obj, const struct mosquitto_message *message);
 
 struct mosquitto *mosq;
+bool recieved;
+int sel;
 
 int main()
 {
@@ -37,12 +42,16 @@ int main()
     int choice;
     bool connected;
     bool gameOver;
+    bool waiting;
+
+    // recieved = false;
 
     mosquitto_lib_init();
     connected = connectToServer();
-    mosquitto_message_callback_set(mosq, recieved);
+    mosquitto_message_callback_set(mosq, messageRecieved);
 
-    if (!connected) {
+    if (!connected)
+    {
         return EXIT_FAILURE;
     }
 
@@ -56,7 +65,7 @@ int main()
     // Plays out game for 9 turns
     while (turns < 9 && !gameOver)
     {
-        int sel = 0; // tracks selection
+        sel = 0; // tracks selection
         int player = 0;
 
         if (determineXO(turns) == 'X')
@@ -67,26 +76,16 @@ int main()
         {
             player = 2;
         }
-        printf("Player%d: make your move", player);
-        scanf("%d", &sel);
-        sel = sel - 1;
 
-        while (!checkRange(sel))
-        { // Makes sure that the moves correspond to spaces on the board
-            printf("invalid move");
-            scanf("%d", &sel);
-            sel = sel - 1;
+        //if (EnvVar != scripttakeover && player == 2) {makeMove()}
+        if (player == 2) {
+            makeMove();
         }
 
-        while (!checkValidity(sel, state))
-        { // Makes sure the desired space is empty before replacing the current token
-            printf("invalid move");
-            scanf("%d", &sel);
-            sel = sel - 1;
-        }
+        while (!getMove(state));
 
         state[sel] = determineXO(turns); // Sets token in gameboard space
-        printBoard(state);                              // prints board
+        printBoard(state);               // prints board
         turns++;
         gameOver = winTest(state); // checks to see for winner
         if (gameOver)
@@ -129,12 +128,14 @@ void intro()
     printf("===========================\n");
 }
 
-bool connectToServer() {
+bool connectToServer()
+{
     mosq = mosquitto_new(NULL, true, NULL);
 
     int rtn = mosquitto_connect(mosq, "localhost", 1883, 30);
 
-    if (rtn != MOSQ_ERR_SUCCESS) {
+    if (rtn != MOSQ_ERR_SUCCESS)
+    {
         printf("Error connecting");
         return false;
     }
@@ -166,7 +167,8 @@ bool checkRange(int sel)
 {
     bool test = false;
 
-    if (sel >= 0 && sel <= 8) {
+    if (sel >= 0 && sel <= 8)
+    {
         test = true;
     }
 
@@ -184,6 +186,65 @@ bool checkValidity(int selection, char state[])
 
     return test;
 }
+
+bool getMove(char state[]) {
+    recieved = false;
+
+    while (!recieved) {
+        usleep(500000);
+    }
+
+    while (!checkRange(sel))
+    { // Makes sure that the moves correspond to spaces on the board
+        printf("invalid move, not in range");
+        return false;
+    }
+
+    while (!checkValidity(sel, state))
+    { // Makes sure the desired space is empty before replacing the current token
+        printf("invalid move, space already taken");
+        return false;
+    }
+
+    return true;
+}
+
+bool makeMove() {
+    char move[2];
+    int result;
+
+    printf("Player2: make your move (1-9):\n");
+    scanf("%s", move);
+
+    result = mosquitto_publish(mosq, NULL, "game/move", 1, move, 0, false);
+
+    return (result == MOSQ_ERR_SUCCESS);
+}
+
+// int getP2Move(char state[])
+// {
+//     int sel;
+
+//     printf("Player2: make your move");
+//     scanf("%d", &sel);
+//     sel = sel - 1;
+
+//     while (!checkRange(sel))
+//     { // Makes sure that the moves correspond to spaces on the board
+//         printf("invalid move");
+//         scanf("%d", &sel);
+//         sel = sel - 1;
+//     }
+
+//     while (!checkValidity(sel, state))
+//     { // Makes sure the desired space is empty before replacing the current token
+//         printf("invalid move");
+//         scanf("%d", &sel);
+//         sel = sel - 1;
+//     }
+
+//     return sel;
+// }
 
 bool winTest(char state[])
 {
@@ -260,6 +321,9 @@ bool winTest(char state[])
     return gameOver;
 }
 
-void recieved(struct mosquitto *mosq, void *obj, const struct mosquitto_message *message) {
+void messageRecieved(struct mosquitto *mosq, void *obj, const struct mosquitto_message *message)
+{
+    sel = atoi((char *)message->payload);
 
+    recieved = true;
 }
