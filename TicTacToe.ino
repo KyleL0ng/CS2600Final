@@ -13,7 +13,6 @@ int runPin = 4;                                          //run button pin
 int xyzPins[] = { 32, 33, 2 };                           //x,y,z pins
 LiquidCrystal_I2C lcd(0x3F, 16, 2);
 char state[] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' };  //board
-bool updateBoard = false;
 
 void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print("Message arrived [");
@@ -23,10 +22,12 @@ void callback(char* topic, byte* payload, unsigned int length) {
     Serial.print((char)payload[i]);
   }
   Serial.println();
-  int move = atoi((char*)payload);
+  //int move = atoi((char*)payload[1]);
+  int move = payload[1] & 0x0f;
   if (move >= 0 && move <= 8) {
-    state[move] = 'O';
-    updateBoard = true;
+    if (state[move] == ' ') {
+      state[move] = payload[0];
+    }
   }
   lcd.setCursor(0, 1);
   lcd.print(state[0]);
@@ -136,17 +137,13 @@ void loop() {
   lcd.print("    ");
 
   if (zVal == 0) {
-    char buf[2];
-    itoa(sel, buf, 10);
+    char buf[3];
+    buf[0] = 'X';
+    itoa(sel, &buf[1], 10);
     client.publish("game/move", buf);
+    delay(1000);
   }
 
-  if (updateBoard) {
-    state[sel] = 'X';
-
-    delay(500);
-    updateBoard = false;
-  }  //end if
 
   //mqtt
   if (!client.connected()) {

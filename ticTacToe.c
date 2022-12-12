@@ -15,13 +15,15 @@ bool checkRange(int sel);
 int getSelection(int A, int B);
 bool checkValidity(int selection, char state[]);
 bool getMove(char state[]);
-//int getP2Move(char state[]);
+bool makeMove();
+// int getP2Move(char state[]);
 bool winTest(char state[]);
 void messageRecieved(struct mosquitto *mosq, void *obj, const struct mosquitto_message *message);
 
 struct mosquitto *mosq;
 bool recieved;
 int sel;
+char letter;
 
 int main()
 {
@@ -61,49 +63,52 @@ int main()
     printBoard(state);
     turns = 0;
     gameOver = false;
+    bool player2 = false;
+    bool pending = false;
 
     // Plays out game for 9 turns
     while (turns < 9 && !gameOver)
     {
-        sel = 0; // tracks selection
-        int player = 0;
 
-        if (determineXO(turns) == 'X')
+        // if (EnvVar != scripttakeover && player == 2) {makeMove()}
+        if (player2 && !pending)
         {
-            player = 1;
-        }
-        else
-        {
-            player = 2;
-        }
-
-        //if (EnvVar != scripttakeover && player == 2) {makeMove()}
-        if (player == 2) {
             makeMove();
+            pending = true;
         }
 
-        while (!getMove(state));
-
-        state[sel] = determineXO(turns); // Sets token in gameboard space
-        printBoard(state);               // prints board
-        turns++;
-        gameOver = winTest(state); // checks to see for winner
-        if (gameOver)
+        if (getMove(state))
         {
-            if (determineXO(turns - 1) == 'X')
-            {
-                printf("Player 1 wins!\n");
+            state[sel] = letter; // Sets token in gameboard space
+            printBoard(state);               // prints board
+            turns++;
+            if (player2) {
+                player2 = false;
+            } 
+            else {
+                player2 = true;
             }
-            else
+            pending = false;
+            gameOver = winTest(state); // checks to see for winner
+            if (gameOver)
             {
-                printf("Player 2 wins!\n");
+                if (determineXO(turns - 1) == 'X')
+                {
+                    printf("Player 1 wins!\n");
+                }
+                else
+                {
+                    printf("Player 2 wins!\n");
+                } //end if
             }
-        }
-        if (turns == 9 && !gameOver)
-        { // checks to see if tie
-            printf("Tie game!\n");
-        }
-    }
+            if (turns == 9 && !gameOver)
+            { // checks to see if tie
+                printf("Tie game!\n");
+            } //end if
+            recieved = false;
+        } //end if
+        mosquitto_loop(mosq, -1, 1);
+    } //end while
 
     printf("Do you want to play again?\n");
     printf("1 --- play again\n");
@@ -139,6 +144,15 @@ bool connectToServer()
         printf("Error connecting");
         return false;
     }
+
+    rtn = mosquitto_subscribe(mosq, NULL, "game/move", 0);
+
+    if (rtn != MOSQ_ERR_SUCCESS)
+    {
+        printf("Error subscribing");
+        return false;
+    }
+
     return true;
 }
 
@@ -187,20 +201,21 @@ bool checkValidity(int selection, char state[])
     return test;
 }
 
-bool getMove(char state[]) {
-    recieved = false;
-
-    while (!recieved) {
-        usleep(500000);
+bool getMove(char state[])
+{
+    if (!recieved)
+    {
+        usleep(1000000);
+        return false;
     }
 
-    while (!checkRange(sel))
+    if (!checkRange(sel))
     { // Makes sure that the moves correspond to spaces on the board
         printf("invalid move, not in range");
         return false;
     }
 
-    while (!checkValidity(sel, state))
+    if (!checkValidity(sel, state))
     { // Makes sure the desired space is empty before replacing the current token
         printf("invalid move, space already taken");
         return false;
@@ -209,14 +224,24 @@ bool getMove(char state[]) {
     return true;
 }
 
-bool makeMove() {
-    char move[2];
+bool makeMove()
+{
+    char move[3];
     int result;
+    int temp;
 
     printf("Player2: make your move (1-9):\n");
-    scanf("%s", move);
+    scanf("%c", &move[1]);
 
-    result = mosquitto_publish(mosq, NULL, "game/move", 1, move, 0, false);
+    fflush(stdin);
+
+    move[1] = move[1] & 0x0f;
+    move[1]--;
+    move[1] = move[1] | 0x30;
+
+    move[0] = 'O';
+
+    result = mosquitto_publish(mosq, NULL, "game/move", 2, move, 0, false);
 
     return (result == MOSQ_ERR_SUCCESS);
 }
@@ -323,7 +348,9 @@ bool winTest(char state[])
 
 void messageRecieved(struct mosquitto *mosq, void *obj, const struct mosquitto_message *message)
 {
-    sel = atoi((char *)message->payload);
+    letter = *(char *)message->payload;
+
+    sel = atoi((char *)(message->payload + 1));
 
     recieved = true;
 }
