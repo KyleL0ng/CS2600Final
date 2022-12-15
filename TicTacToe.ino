@@ -12,7 +12,8 @@ IPAddress server(192, 168, 254, 137);                    //IP of server
 int runPin = 4;                                          //run button pin
 int xyzPins[] = { 32, 33, 2 };                           //x,y,z pins
 LiquidCrystal_I2C lcd(0x3F, 16, 2);
-char state[] = { ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ' };  //board
+char state[] = { '1', '2', '3', '4', '5', '6', '7', '8', '9' };  //board
+bool playing = false;                                     //sees whether game is in progress
 
 void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print("Message arrived [");
@@ -24,8 +25,8 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.println();
   //int move = atoi((char*)payload[1]);
   int move = payload[1] & 0x0f;
-  if (move >= 0 && move <= 8) {
-    if (state[move] == ' ') {
+  if (move >= 0 && move <= 8 && (payload[0] == 'X' || payload[0] == 'O')) {
+    if (state[move] != 'X' && state[move] != 'O') {
       state[move] = payload[0];
     }
   }
@@ -33,11 +34,11 @@ void callback(char* topic, byte* payload, unsigned int length) {
   lcd.print(state[0]);
   lcd.print(state[1]);
   lcd.print(state[2]);
-  lcd.print("   ");
+  lcd.print("...");
   lcd.print(state[3]);
   lcd.print(state[4]);
   lcd.print(state[5]);
-  lcd.print("   ");
+  lcd.print("...");
   lcd.print(state[6]);
   lcd.print(state[7]);
   lcd.print(state[8]);
@@ -94,9 +95,10 @@ void setup() {
   lcd.print("  Tic-Tac-Toe!  ");  // The print content is displayed on the LCD
   lcd.setCursor(0, 1);
   lcd.print("Hit Run to begin");
-  while (digitalRead(runPin))
-    ;
-  lcd.clear();
+  // while (digitalRead(runPin));
+  // client.publish("game/move", "S");
+  // playing = true;
+  // lcd.clear();
 }
 
 void loop() {
@@ -131,16 +133,49 @@ void loop() {
     }  //end if
   }    //end if
 
-  lcd.setCursor(0, 0);
-  lcd.print("Selection: ");
-  lcd.print(sel + 1);
-  lcd.print("    ");
+  if (playing) {
+    lcd.setCursor(0, 0);
+    lcd.print("Selection: ");
+    lcd.print(sel + 1);
+    lcd.print("    ");
+
+    lcd.setCursor(0, 1);
+    lcd.print(state[0]);
+    lcd.print(state[1]);
+    lcd.print(state[2]);
+    lcd.print("...");
+    lcd.print(state[3]);
+    lcd.print(state[4]);
+    lcd.print(state[5]);
+    lcd.print("...");
+    lcd.print(state[6]);
+    lcd.print(state[7]);
+    lcd.print(state[8]);
+  }
 
   if (zVal == 0) {
     char buf[3];
     buf[0] = 'X';
     itoa(sel, &buf[1], 10);
     client.publish("game/move", buf);
+    delay(1000);
+  }
+
+  if (digitalRead(runPin) == 0) {
+    if (playing) {
+      playing = false;
+      client.publish("game/move", "Q");
+      lcd.clear();
+      lcd.setCursor(0, 0);            
+      lcd.print("  Tic-Tac-Toe!  ");  
+      lcd.setCursor(0, 1);
+      lcd.print("Hit Run to begin");
+    }
+    else {
+      playing = true;
+      lcd.clear();
+      client.publish("game/move", "S");
+    }
     delay(1000);
   }
 
