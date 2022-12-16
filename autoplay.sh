@@ -25,7 +25,7 @@ mosquitto_sub -h localhost -t 'game/move' | while read LINE; do #constantly read
         done #loop gets the number of the last open square available
         sleep 2 #wait 2 seconds to make sure that the C program is caught up
         mosquitto_pub -h localhost -t game/move -m "O$MOVE" #publishes the move with an O
-    elif [ $LETTER == "Q" ]; then
+    elif [ $LETTER == "Q" ] || [ $LETTER == "F" ]; then
         exit 0 #program will exit if the message's letter is Q (sent when player quits the game)
     fi
 done

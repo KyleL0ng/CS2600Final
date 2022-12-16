@@ -97,6 +97,7 @@ int main()
             gameOver = winTest(state); // checks to see for winner
             if (gameOver)
             {
+                mosquitto_publish(mosq, NULL, "game/move", 2, "F", 0, false);
                 if (determineXO(turns - 1) == 'X')
                 {
                     printf("Player 1 wins!\n");
