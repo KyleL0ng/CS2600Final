@@ -32,7 +32,7 @@ while [ $RUN == 1 ]; do #always runs
                 if [ $HUMAN == 0 ]; then #if there is no human
                     echo "Auto"
                     ./autoplay.sh & #start the autoplay script
-                    sleep 1
+                    sleep 1 #waits 1 second for the script to catch up
                     mosquitto_pub -h localhost -t game/move -m "$SEND" #send SEND (the first move made) as a message so the script
                     echo "Autoplay script started"
                 fi
